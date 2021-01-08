@@ -10,12 +10,11 @@ servers_started = 0
 notebooks_lock = asyncio.Lock()
 notebooks_executed = 0
 
-async def run_user_notebook(notebook_path):
+async def run_user_notebook(cells, token=None):
     global servers_started
     global notebooks_executed
 
-    cells = parse_notebook_cells(notebook_path)
-    hub = JupyterHubAPI("http://localhost:8000")
+    hub = JupyterHubAPI(hub_url="http://localhost:8000", api_token=token)
 
     async with hub:
         token = await hub.identify_token(hub.api_token)
@@ -41,8 +40,10 @@ async def run_user_notebook(notebook_path):
         finally:
             await hub.delete_user(username)
 
-async def run_stress_test(num_users, notebook, timeout):
-    tasks = [run_user_notebook(notebook) for i in range(num_users)]
+async def run_stress_test(num_users, notebook_path, timeout, token):
+    cells = parse_notebook_cells(notebook_path)
+
+    tasks = [run_user_notebook(cells, token) for i in range(num_users)]
     _done, _running = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED, timeout=timeout)
     
     print(f'Done: {len(_done)}')
@@ -58,6 +59,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--num-users",
+        type=int,
         default=5,
         help="Number of active users"
     )
@@ -72,10 +74,15 @@ def main():
         default="simple.ipynb",
         help="Notebook to execute"
     )
+    parser.add_argument(
+        "--api-token",
+        help="Notebook to execute"
+    )
+
     args = parser.parse_args()
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_stress_test(args.num_users, args.notebook, args.test_time_period))
+    loop.run_until_complete(run_stress_test(args.num_users, args.notebook, args.test_time_period, args.api_token))
     
 if __name__ == "__main__":
     main()
